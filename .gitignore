@@ -1,0 +1,11 @@
+node_modules/
+.env
+*.log
+curl_out.txt
+post_out.txt
+node_v_out
+multer_ver
+test_*.png
+server_output.log
+server.log
+.vscode/
