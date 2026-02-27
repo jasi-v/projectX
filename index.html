@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="en" class="h-full">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Encrypted QR Code Generator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    .qr-canvas {
+      image-rendering: pixelated;
+      image-rendering: -moz-crisp-edges;
+      image-rendering: crisp-edges;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      padding: 16px 24px;
+      border-radius: 8px;
+      font-weight: 500;
+      animation: slideIn 0.3s ease-out;
+      z-index: 1000;
+    }
+
+    @keyframes slideIn {
+      from {
+        transform: translateX(400px);
+        opacity: 0;
+      }
+
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+
+    .tab-btn {
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-weight: 600;
+      transition: all 0.2s;
+      cursor: pointer;
+      opacity: 0.6;
+    }
+
+    .tab-btn.active {
+      opacity: 1;
+      background: var(--primary-action-color, #3b82f6);
+      color: var(--text-color, white);
+      box-shadow: 0 4px 14px rgba(59, 130, 246, 0.3);
+    }
+
+    .tab-content {
+      display: none;
+      animation: fadeIn 0.3s ease-in-out;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .file-drop {
+      border: 2px dashed rgba(255, 255, 255, 0.2);
+      border-radius: 12px;
+      transition: all 0.2s;
+    }
+
+    .file-drop:hover,
+    .file-drop.dragover {
+      border-color: #3b82f6;
+      background: rgba(59, 130, 246, 0.05);
+    }
+  </style>
+</head>
+
+<body class="h-full"
+  style="background-color: #0f172a; color: #f1f5f9; font-family: system-ui, -apple-system, sans-serif;">
+  <div id="app-wrapper" class="h-full w-full overflow-auto">
+    <div class="min-h-full px-4 py-8">
+      <div class="max-w-4xl mx-auto">
+
+        <!-- Header -->
+        <div class="text-center mb-8">
+          <h1 class="font-bold mb-2" style="font-size: 48px;">🔐 Encrypted QR Tools</h1>
+          <p class="opacity-80" style="font-size: 18px;">Create, hide, and extract secure QR codes</p>
+        </div>
+
+        <!-- Tabs -->
+        <div
+          class="flex justify-center gap-2 mb-8 bg-slate-800/50 p-2 rounded-xl border border-slate-700 w-max mx-auto">
+          <button class="tab-btn active" onclick="switchTab('generate')">1. Generate QR</button>
+          <button class="tab-btn" onclick="switchTab('hide')">2. Hide in Image</button>
+          <button class="tab-btn" onclick="switchTab('extract')">3. Extract QR</button>
+        </div>
+
+        <!-- TAB 1: GENERATE QR -->
+        <div id="tab-generate" class="tab-content active">
+          <div class="grid md:grid-cols-2 gap-6">
+            <!-- Input Section -->
+            <div class="rounded-xl shadow-lg p-6 bg-slate-800 border border-slate-600">
+              <h2 class="font-semibold mb-4 text-2xl">Create New QR</h2>
+              <form id="qr-form">
+                <div class="mb-4">
+                  <label class="block mb-2 font-medium">Text or URL to Encode</label>
+                  <textarea id="qr-data" rows="4"
+                    class="w-full px-4 py-3 bg-slate-900 border border-slate-600 rounded-lg focus:outline-none focus:border-blue-500 transition-all"
+                    placeholder="Enter secret message..." required></textarea>
+                </div>
+                <div class="mb-6">
+                  <label class="block mb-2 font-medium">Encryption Password</label>
+                  <input type="password" id="password"
+                    class="w-full px-4 py-3 bg-slate-900 border border-slate-600 rounded-lg focus:outline-none focus:border-blue-500 transition-all"
+                    placeholder="Enter password..." required>
+                </div>
+                <button type="submit" id="generate-btn"
+                  class="w-full py-3 px-6 rounded-lg font-semibold bg-blue-500 hover:bg-blue-600 transition-all shadow-lg text-white">Generate
+                  Encrypted QR Code</button>
+              </form>
+            </div>
+            <!-- Output Section -->
+            <div class="rounded-xl shadow-lg p-6 bg-slate-800 border border-slate-600">
+              <h2 class="font-semibold mb-4 text-2xl">Generated QR Code</h2>
+              <div id="qr-output"
+                class="flex items-center justify-center bg-slate-900/50 rounded-lg border-2 border-slate-700 border-dashed p-8 mb-4 min-h-80 relative">
+                <div class="text-center opacity-50" id="qr-placeholder">
+                  <span class="text-4xl block mb-2">📷</span>
+                  <p>Your QR code will appear here</p>
+                </div>
+              </div>
+              <button id="download-btn"
+                class="w-full py-3 px-6 rounded-lg font-semibold bg-slate-600 text-white transition-all opacity-50 cursor-not-allowed hidden"
+                disabled>Download QR Code</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 2: HIDE IN IMAGE -->
+        <div id="tab-hide" class="tab-content">
+          <div class="grid md:grid-cols-2 gap-6">
+            <div class="rounded-xl shadow-lg p-6 bg-slate-800 border border-slate-600">
+              <h2 class="font-semibold mb-4 text-2xl">Hide in Custom Image</h2>
+              <p class="text-sm opacity-70 mb-4">Upload a cover image (PNG). The encrypted message will be hidden inside
+                its pixels invisibly.</p>
+
+              <form id="hide-form">
+                <div class="mb-4 relative">
+                  <label class="block mb-2 font-medium">Cover Image (PNG)</label>
+                  <input type="file" id="hide-file" accept="image/png"
+                    class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" required
+                    onchange="updateFileName(this, 'hide-filename')">
+                  <div class="file-drop w-full p-4 text-center cursor-pointer bg-slate-900">
+                    <span id="hide-filename" class="opacity-70">Click to upload or drag .png here</span>
+                  </div>
+                </div>
+                <div class="mb-4">
+                  <label class="block mb-2 font-medium">Secret Message</label>
+                  <textarea id="hide-data" rows="3"
+                    class="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg focus:outline-none focus:border-blue-500 transition-all"
+                    placeholder="Enter secret to hide..." required></textarea>
+                </div>
+                <div class="mb-6">
+                  <label class="block mb-2 font-medium">Encryption Password</label>
+                  <input type="password" id="hide-password"
+                    class="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg focus:outline-none focus:border-blue-500 transition-all"
+                    placeholder="Enter password..." required>
+                </div>
+                <button type="submit" id="hide-btn"
+                  class="w-full py-3 px-6 rounded-lg font-semibold bg-purple-500 hover:bg-purple-600 transition-all shadow-lg text-white">Embed
+                  and Download Image</button>
+              </form>
+            </div>
+
+            <div
+              class="rounded-xl shadow-lg p-6 bg-slate-800 border border-slate-600 flex flex-col items-center justify-center text-center">
+              <div class="text-5xl mb-4">🖼️ 🤫</div>
+              <h3 class="text-xl font-bold mb-2">Invisibly Hidden</h3>
+              <p class="opacity-70 max-w-sm">We use LSB Steganography to hide the QR payload directly into the image
+                pixels. The image will look completely normal to the human eye.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 3: EXTRACT QR -->
+        <div id="tab-extract" class="tab-content">
+          <div class="grid md:grid-cols-2 gap-6">
+            <div class="rounded-xl shadow-lg p-6 bg-slate-800 border border-slate-600">
+              <h2 class="font-semibold mb-4 text-2xl">Extract QR Code</h2>
+              <p class="text-sm opacity-70 mb-4">Upload a PNG image that contains hidden data to recover the QR code and
+                password link.</p>
+
+              <form id="extract-form">
+                <div class="mb-6 relative">
+                  <input type="file" id="extract-file" accept="image/png"
+                    class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" required
+                    onchange="updateFileName(this, 'extract-filename')">
+                  <div class="file-drop w-full p-12 text-center cursor-pointer bg-slate-900">
+                    <div class="text-4xl mb-3">🔍</div>
+                    <span id="extract-filename" class="opacity-70 font-medium">Upload modified PNG</span>
+                  </div>
+                </div>
+                <button type="submit" id="extract-btn"
+                  class="w-full py-3 px-6 rounded-lg font-semibold bg-emerald-500 hover:bg-emerald-600 transition-all shadow-lg text-white">Extract
+                  QR Code</button>
+              </form>
+            </div>
+
+            <div class="rounded-xl shadow-lg p-6 bg-slate-800 border border-slate-600">
+              <h2 class="font-semibold mb-4 text-2xl">Extracted Result</h2>
+              <div id="extract-output"
+                class="flex items-center justify-center bg-slate-900/50 rounded-lg border-2 border-slate-700 border-dashed p-8 min-h-[250px] relative">
+                <div class="text-center opacity-50" id="extract-placeholder">
+                  <p>QR code hidden in the image will appear here</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Features Info -->
+        <div class="mt-12 grid md:grid-cols-3 gap-4">
+          <div class="rounded-lg p-4 text-center bg-slate-800/30">
+            <div class="text-3xl mb-2">🔒</div>
+            <h3 class="font-semibold mb-1">AES Encryption</h3>
+            <p class="text-sm opacity-70">Military-grade encryption for your data</p>
+          </div>
+          <div class="rounded-lg p-4 text-center bg-slate-800/30">
+            <div class="text-3xl mb-2">🖼️</div>
+            <h3 class="font-semibold mb-1">Steganography</h3>
+            <p class="text-sm opacity-70">Hide encrypted data in any PNG</p>
+          </div>
+          <div class="rounded-lg p-4 text-center bg-slate-800/30">
+            <div class="text-3xl mb-2">📱</div>
+            <h3 class="font-semibold mb-1">Scannable</h3>
+            <p class="text-sm opacity-70">Works instantly with smartphone scanners</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = window.location.protocol === 'file:' ? 'http://localhost:5000' : '';
+    let currentQRDataUrl = null;
+
+    function showToast(message, isError = false) {
+      const toast = document.createElement('div');
+      toast.className = 'toast';
+      toast.textContent = message;
+      toast.style.backgroundColor = isError ? '#ef4444' : '#10b981';
+      toast.style.color = '#ffffff';
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+      event.target.classList.add('active');
+      document.getElementById('tab-' + tabId).classList.add('active');
+    }
+
+    function updateFileName(input, targetId) {
+      const text = input.files.length > 0 ? input.files[0].name : 'Click to upload or drag .png here';
+      document.getElementById(targetId).textContent = text;
+    }
+
+    // 1. GENERATE QR
+    document.getElementById('qr-form').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      const data = document.getElementById('qr-data').value;
+      const password = document.getElementById('password').value;
+      const generateBtn = document.getElementById('generate-btn');
+
+      generateBtn.disabled = true;
+      generateBtn.textContent = "Generating...";
+
+      try {
+        const response = await fetch(`${API_BASE}/generate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ data, password, useStego: false }) // useStego is false, we use tab 2 for custom images now
+        });
+
+        if (!response.ok) throw new Error("Server error");
+        const json = await response.json();
+        if (!json.image) throw new Error(json.error || "No image returned");
+
+        currentQRDataUrl = json.image;
+        const outputDiv = document.getElementById('qr-output');
+
+        outputDiv.innerHTML = `<img src="${json.image}" class="mx-auto rounded-lg shadow-md max-w-full">`;
+
+        let urlBar = document.createElement('div');
+        urlBar.style.cssText = 'position:absolute; bottom:-60px; left:0; right:0; padding:12px; background:rgba(59,130,246,0.1); border:1px solid rgba(59,130,246,0.25); border-radius:10px; font-size:12px; word-break:break-all; text-align:center;';
+        urlBar.innerHTML = `<span style="color:#94a3b8;font-weight:600;display:block;margin-bottom:4px;">🔗 Scan or open link to decrypt:</span><a href="${json.decryptUrl}" target="_blank" style="color:#60a5fa;">${json.decryptUrl}</a>`;
+        outputDiv.appendChild(urlBar);
+
+        const downloadBtn = document.getElementById('download-btn');
+        downloadBtn.classList.remove('hidden');
+        downloadBtn.disabled = false;
+
+        showToast('QR Code generated successfully!');
+      } catch (err) {
+        console.error("DEBUG:", err);
+        showToast('QR generation failed: ' + err.message, true);
+      } finally {
+        generateBtn.disabled = false;
+        generateBtn.textContent = "Generate Encrypted QR Code";
+      }
+    });
+
+    document.getElementById('download-btn').addEventListener('click', function () {
+      if (currentQRDataUrl) {
+        const link = document.createElement('a');
+        link.download = 'encrypted-qr-code.png';
+        link.href = currentQRDataUrl;
+        link.click();
+        showToast('Downloaded!');
+      }
+    });
+
+    // 2. HIDE IN IMAGE
+    document.getElementById('hide-form').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      const formData = new FormData();
+      formData.append('image', document.getElementById('hide-file').files[0]);
+      formData.append('data', document.getElementById('hide-data').value);
+      formData.append('password', document.getElementById('hide-password').value);
+
+      const hideBtn = document.getElementById('hide-btn');
+      hideBtn.disabled = true;
+      hideBtn.textContent = "Embedding...";
+
+      try {
+        const response = await fetch(`${API_BASE}/api/embed`, { method: "POST", body: formData });
+        if (!response.ok) throw new Error("Server error");
+
+        // It returns the raw image blob directly
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+
+        const link = document.createElement('a');
+        link.download = 'hidden_secret.png';
+        link.href = url;
+        link.click();
+        showToast('Modified image downloaded! ✅');
+      } catch (err) {
+        showToast('Embedding failed.', true);
+      } finally {
+        hideBtn.disabled = false;
+        hideBtn.textContent = "Embed and Download Image";
+      }
+    });
+
+    // 3. EXTRACT FROM IMAGE
+    document.getElementById('extract-form').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      const formData = new FormData();
+      formData.append('image', document.getElementById('extract-file').files[0]);
+
+      const extBtn = document.getElementById('extract-btn');
+      extBtn.disabled = true;
+      extBtn.textContent = "Extracting...";
+
+      try {
+        const response = await fetch(`${API_BASE}/api/extract`, { method: "POST", body: formData });
+        const json = await response.json();
+
+        if (!response.ok) throw new Error(json.error || "Server error");
+        if (!json.image) throw new Error("No image returned");
+
+        const outputDiv = document.getElementById('extract-output');
+        outputDiv.innerHTML = `<img src="${json.image}" class="mx-auto rounded-lg shadow-md max-w-full">`;
+
+        let urlBar = document.createElement('div');
+        urlBar.style.cssText = 'position:absolute; bottom:-60px; left:0; right:0; padding:12px; background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.25); border-radius:10px; font-size:12px; word-break:break-all; text-align:center;';
+        urlBar.innerHTML = `<span style="color:#10b981;font-weight:600;display:block;margin-bottom:4px;">✅ QR Recovered! Scan or open link:</span><a href="${json.decryptUrl}" target="_blank" style="color:#34d399;">${json.decryptUrl}</a>`;
+        outputDiv.appendChild(urlBar);
+
+        showToast('QR Code extracted successfully! 🎉');
+      } catch (err) {
+        showToast(err.message, true);
+        document.getElementById('extract-output').innerHTML = `<div class="text-red-500 font-medium">${err.message}</div>`;
+      } finally {
+        extBtn.disabled = false;
+        extBtn.textContent = "Extract QR Code";
+      }
+    });
+
+  </script>
+</body>
+
+</html>
